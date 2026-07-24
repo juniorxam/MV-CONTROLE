@@ -12,6 +12,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
+# Biblioteca para geração de Imagem do Cupom
+from PIL import Image, ImageDraw, ImageFont
+
 # Configuração da página Web
 st.set_page_config(page_title="Frango Assado MV - Gestão Completa", page_icon="🍗", layout="wide")
 
@@ -99,12 +102,6 @@ def salvar_historico(historico):
     local_storage.setItem("mv_historico", json.dumps(historico))
 
 def gerar_link_whatsapp(venda, status="confirmado"):
-    """
-    Status aceitos:
-    - 'confirmado': Registro inicial do pedido
-    - 'pronto': Aviso de que está pronto para busca no balcão
-    - 'entrega': Aviso de que o motoqueiro saiu para entregar
-    """
     tel = "".join([c for c in str(venda.get('telefone', '')) if c.isdigit()])
     if not tel or len(tel) < 10:
         return None
@@ -157,31 +154,104 @@ def gerar_link_whatsapp(venda, status="confirmado"):
     texto_encoded = urllib.parse.quote(msg)
     return f"https://wa.me/{tel}?text={texto_encoded}"
 
-def gerar_cupom_texto(venda):
-    cupom = f"================================\n"
-    cupom += f"       FRANGO ASSADO MV\n"
-    cupom += f"   Sabor que Conquista - 407 Norte\n"
-    cupom += f"================================\n"
-    cupom += f"Data/Hora: {venda['data_hora']}\n"
-    cupom += f"Cliente  : {venda['cliente']}\n"
-    cupom += f"Telefone : {venda.get('telefone', 'N/A')}\n"
-    cupom += f"Tipo     : {venda.get('tipo_pedido', 'Retirada')}\n"
-    cupom += f"Horário  : {venda.get('horario_retirada', 'Imediato')}\n"
-    cupom += f"--------------------------------\n"
-    if venda['qtd_frango'] > 0: cupom += f"{venda['qtd_frango']}x Frango Assado c/ Batata\n"
-    if venda['qtd_farofa'] > 0: cupom += f"{venda['qtd_farofa']}x Porcao de Farofa\n"
-    if venda['qtd_batata'] > 0: cupom += f"{venda['qtd_batata']}x Batata Extra\n"
-    if venda['qtd_refri'] > 0:  cupom += f"{venda['qtd_refri']}x Refrigerante\n"
-    if venda.get('taxa_entrega', 0) > 0: cupom += f"Taxa de Entrega: R$ {venda['taxa_entrega']:.2f}\n"
-    cupom += f"--------------------------------\n"
-    cupom += f"Pagamento : {venda.get('forma_pagamento', 'N/A')}\n"
+def gerar_cupom_imagem(venda):
+    """
+    Gera uma imagem elegante no estilo recibo/cupom em formato PNG.
+    """
+    width = 500
+    height = 680
+    
+    # Criar imagem com fundo creme claro (estilo papel de recibo)
+    bg_color = (255, 253, 245)
+    img = Image.new('RGB', (width, height), color=bg_color)
+    draw = ImageDraw.Draw(img)
+    
+    # Tentar carregar fonte padrão do sistema
+    try:
+        font_title = ImageFont.truetype("arial.ttf", 22)
+        font_subtitle = ImageFont.truetype("arial.ttf", 13)
+        font_bold = ImageFont.truetype("arialbd.ttf", 15)
+        font_text = ImageFont.truetype("arial.ttf", 14)
+        font_small = ImageFont.truetype("arial.ttf", 12)
+    except:
+        font_title = font_subtitle = font_bold = font_text = font_small = ImageFont.load_default()
+
+    # Cores
+    c_orange = (211, 84, 0)
+    c_dark = (44, 62, 80)
+    c_gray = (127, 140, 141)
+
+    # 1. Cabeçalho Laranja
+    draw.rectangle([0, 0, width, 85], fill=c_orange)
+    draw.text((width//2, 25), "🍗 FRANGO ASSADO MV", fill=(255, 255, 255), font=font_title, anchor="mm")
+    draw.text((width//2, 58), "Sabor que Conquista • 407 Norte - Palmas/TO", fill=(255, 245, 230), font=font_subtitle, anchor="mm")
+
+    y = 100
+    # 2. Informações do Pedido
+    draw.text((30, y), f"Data/Hora: {venda['data_hora']}", fill=c_gray, font=font_small)
+    draw.text((width - 30, y), f"ID: #{venda['id'] % 100000}", fill=c_gray, font=font_small, anchor="ra")
+    y += 22
+    draw.text((30, y), f"Cliente: {venda['cliente']}", fill=c_dark, font=font_bold)
+    y += 20
+    draw.text((30, y), f"Telefone: {venda.get('telefone', 'N/A')}  |  Tipo: {venda.get('tipo_pedido', 'Retirada')}", fill=c_dark, font=font_text)
+    y += 20
+    draw.text((30, y), f"Horário de Retirada/Entrega: {venda.get('horario_retirada', 'Imediato')}", fill=c_orange, font=font_bold)
+    
+    y += 30
+    # Linha Divisória
+    draw.line([(30, y), (width - 30, y)], fill=(220, 220, 220), width=2)
+    
+    y += 15
+    # 3. Tabela de Itens
+    draw.text((30, y), "ITEM / DESCRIÇÃO", fill=c_gray, font=font_small)
+    draw.text((width - 30, y), "QTD", fill=c_gray, font=font_small, anchor="ra")
+    y += 20
+    
+    itens = []
+    if venda['qtd_frango'] > 0: itens.append(("Frango Assado (c/ Batata)", venda['qtd_frango']))
+    if venda['qtd_farofa'] > 0: itens.append(("Porção de Farofa Extra", venda['qtd_farofa']))
+    if venda['qtd_batata'] > 0: itens.append(("Batata Extra", venda['qtd_batata']))
+    if venda['qtd_refri'] > 0: itens.append(("Refrigerante 2L", venda['qtd_refri']))
+    if venda.get('taxa_entrega', 0) > 0: itens.append(("Taxa de Entrega (Delivery)", f"R$ {venda['taxa_entrega']:.2f}"))
+
+    for item_nome, qtd in itens:
+        draw.text((30, y), f"• {item_nome}", fill=c_dark, font=font_text)
+        draw.text((width - 30, y), f"{qtd}", fill=c_dark, font=font_bold, anchor="ra")
+        y += 24
+
+    y += 10
+    # Linha Divisória Pontilhada
+    draw.line([(30, y), (width - 30, y)], fill=(200, 200, 200), width=1)
+    
+    y += 20
+    # 4. Pagamento e Total
+    draw.text((30, y), f"Forma de Pagamento: {venda.get('forma_pagamento', 'N/I')}", fill=c_dark, font=font_text)
+    y += 22
+    
     if venda.get('troco', 0) > 0:
-        cupom += f"Troco p/  : R$ {venda.get('valor_recebido', 0):.2f} (Troco: R$ {venda['troco']:.2f})\n"
-    cupom += f"TOTAL     : R$ {venda['valor_final']:.2f}\n"
+        draw.text((30, y), f"Valor Recebido: R$ {venda.get('valor_recebido', 0):.2f}  (Troco: R$ {venda['troco']:.2f})", fill=(39, 174, 96), font=font_bold)
+        y += 24
+
+    # Bloco com Fundo Destacado para o TOTAL
+    y += 10
+    draw.rectangle([30, y, width - 30, y + 45], fill=(254, 237, 222), outline=c_orange, width=1)
+    draw.text((45, y + 22), "TOTAL DO PEDIDO:", fill=c_orange, font=font_bold, anchor="lm")
+    draw.text((width - 45, y + 22), f"R$ {venda['valor_final']:.2f}", fill=c_orange, font=font_title, anchor="rm")
+    
+    y += 65
     if venda.get('observacao'):
-        cupom += f"Obs: {venda['observacao']}\n"
-    cupom += f"================================\n"
-    return cupom
+        draw.text((30, y), f"📝 Obs: {venda['observacao']}", fill=c_dark, font=font_small)
+        y += 25
+
+    # 5. Rodapé
+    y = height - 40
+    draw.line([(30, y - 10), (width - 30, y - 10)], fill=(220, 220, 220), width=1)
+    draw.text((width//2, y), "Obrigado pela preferência e bom apetite! ❤️", fill=c_gray, font=font_subtitle, anchor="mm")
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
 
 def gerar_pdf_relatorio(df_dia, data_str):
     buffer = io.BytesIO()
@@ -355,10 +425,10 @@ with aba_dash:
         st.info("Nenhuma venda registrada ainda.")
 
 # ------------------------------------------
-# ABA GRELHA & STATUS (COM NOVO DISPARO)
+# ABA GRELHA & STATUS
 # ------------------------------------------
 with aba_grelha:
-    st.markdown("### 🔥 Controle de Grelha e Disparo de Status")
+    st.markdown("### 🔥 Controle de Grelha e Status")
     
     if historico_vendas:
         df_grelha = pd.DataFrame(historico_vendas)
@@ -401,7 +471,7 @@ with aba_grelha:
         st.info("Nenhum pedido cadastrado no sistema.")
 
 # ------------------------------------------
-# ABA 1: NOVA VENDA
+# ABA 1: NOVA VENDA (COM CUPOM EM IMAGEM)
 # ------------------------------------------
 with aba1:
     st.markdown("### 📝 Registrar Novo Pedido")
@@ -508,33 +578,40 @@ with aba1:
         st.success(f"Venda registrada com sucesso! Total: R$ {valor_final:.2f}")
         st.rerun()
 
+    # ÁREA DO RECIBO APÓS FINALIZAR VENDA
     if 'ultima_venda' in st.session_state:
         uv = st.session_state['ultima_venda']
         st.markdown("---")
         
         col_uv_head1, col_uv_head2 = st.columns([3, 1])
         with col_uv_head1:
-            st.markdown(f"#### 📄 Ações do Pedido Recente: **{uv['cliente']}**")
+            st.markdown(f"#### 📄 Comprovante do Pedido: **{uv['cliente']}**")
         with col_uv_head2:
             if st.button("✖️ Iniciar Novo Pedido", type="secondary"):
                 del st.session_state['ultima_venda']
                 st.rerun()
 
-        col_act1, col_act2 = st.columns(2)
+        col_act1, col_act2 = st.columns([1, 1])
+        
         with col_act1:
             link_zap = gerar_link_whatsapp(uv, status="confirmado")
             if link_zap:
-                st.markdown(f"👉 [📲 **Enviar Confirmação no WhatsApp de {uv['cliente']}**]({link_zap})")
-            else:
-                st.warning("⚠️ Telefone inválido/não informado.")
-        
+                st.markdown(f"👉 [📲 **Enviar Confirmação no WhatsApp**]({link_zap})")
+            
+            # Gerar e exibir a imagem do cupom na tela
+            img_buffer = gerar_cupom_imagem(uv)
+            st.image(img_buffer, caption="Preview do Cupom", width=380)
+            
         with col_act2:
-            cupom_txt = gerar_cupom_texto(uv)
+            st.write(" ")
+            st.write(" ")
             st.download_button(
-                label="🖨️ Baixar Cupom do Pedido",
-                data=cupom_txt,
-                file_name=f"cupom_{uv['cliente'].replace(' ', '_')}.txt",
-                mime="text/plain"
+                label="🖼️ BAIXAR CUPOM EM IMAGEM (PNG)",
+                data=img_buffer,
+                file_name=f"cupom_{uv['cliente'].replace(' ', '_')}.png",
+                mime="image/png",
+                type="primary",
+                use_container_width=True
             )
 
 # ------------------------------------------
@@ -593,10 +670,22 @@ with aba3:
         for idx, item in enumerate(historico_vendas):
             with st.expander(f"🗓️ {item['data_hora']} - {item['cliente']} | R$ {item['valor_final']:.2f} ({item.get('forma_pagamento', 'N/I')})"):
                 
-                link_zap_hist = gerar_link_whatsapp(item, status="confirmado")
-                if link_zap_hist:
-                    st.markdown(f"📲 [**Reenviar Comprovante para {item['cliente']}**]({link_zap_hist})")
+                col_h_act1, col_h_act2 = st.columns(2)
+                with col_h_act1:
+                    link_zap_hist = gerar_link_whatsapp(item, status="confirmado")
+                    if link_zap_hist:
+                        st.markdown(f"📲 [**Reenviar Comprovante no WhatsApp**]({link_zap_hist})")
                 
+                with col_h_act2:
+                    img_hist_buffer = gerar_cupom_imagem(item)
+                    st.download_button(
+                        label="🖼️ Baixar Cupom em Imagem",
+                        data=img_hist_buffer,
+                        file_name=f"cupom_{item['id']}.png",
+                        mime="image/png",
+                        key=f"btn_img_{item['id']}"
+                    )
+
                 st.markdown("---")
                 
                 with st.form(key=f"form_edit_{item['id']}"):
@@ -670,7 +759,7 @@ with aba4:
 with aba_ajuda:
     st.markdown("### 📖 Guia de Uso do Sistema")
     st.markdown("""
-    * **Disparo na Grelha:** Vá na aba `🔥 Grelha & Status`. Ao lado do pedido do cliente, você verá o botão direto **✅ PRONTO P/ RETIRADA** (para retirada no balcão) ou **🛵 SAIU P/ ENTREGA** (para delivery).
-    * **Troco:** O valor do troco digitado em vendas em dinheiro vai automaticamente para o comprovante do entregador.
-    * **PDF:** Baixe o relatório completo de fechamento de caixa na aba `📊 Dashboard & PDF`.
+    * **Cupom em Imagem:** Ao registrar a venda, a imagem do comprovante é exibida na tela. Clique em **🖼️ BAIXAR CUPOM EM IMAGEM (PNG)** para guardar ou enviar direto pelo WhatsApp.
+    * **Disparo na Grelha:** Na aba `🔥 Grelha & Status`, use os botões rápidos para avisar o cliente assim que o frango estiver pronto para busca ou a caminho da entrega.
+    * **Relatório em PDF:** Baixe o fechamento de caixa na aba `📊 Dashboard & PDF`.
     """)
