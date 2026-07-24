@@ -44,6 +44,8 @@ DADOS_EXEMPLO = [
         'qtd_refri': 1,
         'subtotal': 148.00,
         'valor_final': 140.00,
+        'valor_recebido': 140.00,
+        'troco': 0.0,
         'forma_pagamento': "PIX",
         'observacao': "Pedido de teste - Marko Pollo"
     },
@@ -61,25 +63,10 @@ DADOS_EXEMPLO = [
         'qtd_refri': 1,
         'subtotal': 78.00,
         'valor_final': 78.00,
+        'valor_recebido': 100.00,
+        'troco': 22.00,
         'forma_pagamento': "Dinheiro",
         'observacao': "Entregar na alameda 2, casa 15"
-    },
-    {
-        'id': 1700000003,
-        'data_hora': datetime.now().strftime("%d/%m/%Y") + " 11:30",
-        'cliente': "João Paulo",
-        'telefone': "63999112233",
-        'tipo_pedido': "Retirada no Local",
-        'horario_retirada': "12:00",
-        'taxa_entrega': 0.0,
-        'qtd_frango': 1,
-        'qtd_farofa': 1,
-        'qtd_batata': 0,
-        'qtd_refri': 0,
-        'subtotal': 65.00,
-        'valor_final': 65.00,
-        'forma_pagamento': "Cartão de Débito",
-        'observacao': ""
     }
 ]
 
@@ -111,7 +98,13 @@ def carregar_historico():
 def salvar_historico(historico):
     local_storage.setItem("mv_historico", json.dumps(historico))
 
-def gerar_link_whatsapp(venda):
+def gerar_link_whatsapp(venda, status="confirmado"):
+    """
+    Status aceitos:
+    - 'confirmado': Registro inicial do pedido
+    - 'pronto': Aviso de que está pronto para busca no balcão
+    - 'entrega': Aviso de que o motoqueiro saiu para entregar
+    """
     tel = "".join([c for c in str(venda.get('telefone', '')) if c.isdigit()])
     if not tel or len(tel) < 10:
         return None
@@ -119,30 +112,47 @@ def gerar_link_whatsapp(venda):
     if len(tel) <= 11 and not tel.startswith("55"):
         tel = "55" + tel
 
-    msg = f"Olá, *{venda['cliente']}*! 👋\n"
-    msg += f"Seu pedido no *Frango Assado MV* foi registrado! 🍗\n\n"
-    msg += f"📋 *Resumo do Pedido:*\n"
-    if venda['qtd_frango'] > 0: msg += f"• {venda['qtd_frango']}x Frango Assado\n"
-    if venda['qtd_farofa'] > 0: msg += f"• {venda['qtd_farofa']}x Porção de Farofa\n"
-    if venda['qtd_batata'] > 0: msg += f"• {venda['qtd_batata']}x Batata Extra\n"
-    if venda['qtd_refri'] > 0: msg += f"• {venda['qtd_refri']}x Refrigerante\n"
-    
-    if venda.get('taxa_entrega', 0) > 0:
-        msg += f"• Taxa de Entrega: R$ {venda['taxa_entrega']:.2f}\n"
-        
-    msg += f"\n⏰ *Horário Previsto:* {venda.get('horario_retirada', 'Imediato')}\n"
-    msg += f"🛵 *Tipo:* {venda.get('tipo_pedido', 'Retirada')}\n"
-    msg += f"💳 *Pagamento:* {venda.get('forma_pagamento', 'Não Informado')}\n"
-    
-    if venda.get('troco', 0) > 0:
-        msg += f"💵 *Troco a Levar:* R$ {venda['troco']:.2f} (Recebido R$ {venda.get('valor_recebido', 0):.2f})\n"
+    if status == "pronto":
+        msg = f"🎉 *SEU PEDIDO ESTÁ PRONTO!* 🎉\n"
+        msg += f"Olá, *{venda['cliente']}*! Seu frango assado quentinho já está na estufa te esperando! 🍗🔥\n\n"
+        msg += f"📍 *Local de Retirada:* 407 Norte (Em frente ao Supermercado da Matilde)\n"
+        msg += f"💰 *Valor Total:* R$ {venda['valor_final']:.2f} ({venda.get('forma_pagamento', 'N/A')})\n"
+        msg += f"\nPode vir retirar! Estamos te aguardando. 😊"
 
-    msg += f"💰 *TOTAL:* R$ {venda['valor_final']:.2f}\n"
-    
-    if venda.get('observacao'):
-        msg += f"📝 *Obs:* {venda['observacao']}\n"
+    elif status == "entrega":
+        msg = f"🛵 *PEDIDO SAIU PARA ENTREGA!* 🛵\n"
+        msg += f"Olá, *{venda['cliente']}*! O entregador acabou de sair com o seu pedido! 🚀\n\n"
+        msg += f"💰 *Total:* R$ {venda['valor_final']:.2f} ({venda.get('forma_pagamento', 'N/A')})\n"
         
-    msg += "\nObrigado pela preferência e bom apetite! ❤️"
+        if venda.get('troco', 0) > 0:
+            msg += f"💵 *Troco que o entregador está levando:* R$ {venda['troco']:.2f}\n"
+            
+        if venda.get('observacao'):
+            msg += f"📌 *Endereço/Obs:* {venda['observacao']}\n"
+            
+        msg += f"\nChega já aí quentinho! Bom apetite! ❤️"
+
+    else:  # Status Padrão: 'confirmado'
+        msg = f"Olá, *{venda['cliente']}*! 👋\n"
+        msg += f"Seu pedido no *Frango Assado MV* foi registrado com sucesso! 🍗\n\n"
+        msg += f"📋 *Resumo do Pedido:*\n"
+        if venda['qtd_frango'] > 0: msg += f"• {venda['qtd_frango']}x Frango Assado\n"
+        if venda['qtd_farofa'] > 0: msg += f"• {venda['qtd_farofa']}x Porção de Farofa\n"
+        if venda['qtd_batata'] > 0: msg += f"• {venda['qtd_batata']}x Batata Extra\n"
+        if venda['qtd_refri'] > 0: msg += f"• {venda['qtd_refri']}x Refrigerante\n"
+        
+        if venda.get('taxa_entrega', 0) > 0:
+            msg += f"• Taxa de Entrega: R$ {venda['taxa_entrega']:.2f}\n"
+            
+        msg += f"\n⏰ *Horário Previsto:* {venda.get('horario_retirada', 'Imediato')}\n"
+        msg += f"🛵 *Tipo:* {venda.get('tipo_pedido', 'Retirada')}\n"
+        msg += f"💳 *Pagamento:* {venda.get('forma_pagamento', 'Não Informado')}\n"
+        
+        if venda.get('troco', 0) > 0:
+            msg += f"💵 *Troco a Levar:* R$ {venda['troco']:.2f}\n"
+
+        msg += f"💰 *TOTAL:* R$ {venda['valor_final']:.2f}\n"
+        msg += "\nObrigado pela preferência! ❤️"
     
     texto_encoded = urllib.parse.quote(msg)
     return f"https://wa.me/{tel}?text={texto_encoded}"
@@ -242,7 +252,7 @@ def gerar_pdf_relatorio(df_dia, data_str):
     return buffer
 
 # ==========================================
-# INTERFACE GRÁFICA
+# INTERFACE GRÁFICA (STREAMLIT)
 # ==========================================
 st.title("🍗 Frango Assado MV")
 
@@ -255,7 +265,7 @@ with col_top1:
 with col_top2:
     if st.button("🔄 RESTAURAR EXEMPLOS (INCLUI MARKO POLLO)", type="secondary", use_container_width=True):
         salvar_historico(DADOS_EXEMPLO)
-        st.success("Exemplos restaurados com Marko Pollo!")
+        st.success("Exemplos restaurados!")
         st.rerun()
 
 hoje_str = datetime.now().strftime("%d/%m/%Y")
@@ -277,7 +287,7 @@ st.markdown("---")
 
 aba_dash, aba_grelha, aba1, aba2, aba3, aba4, aba_ajuda = st.tabs([
     "📊 Dashboard & PDF", 
-    "🔥 Grelha & Reservas",
+    "🔥 Grelha & Status",
     "🛒 Nova Venda", 
     "👥 Clientes & Fidelidade", 
     "📜 Histórico & Edição", 
@@ -330,7 +340,7 @@ with aba_dash:
         
         st.markdown("---")
         
-        st.markdown("#### 💵 Fechamento de Caixa do Dia (Conferência)")
+        st.markdown("#### 💵 Fechamento de Caixa do Dia")
         pix_total = df_dia[df_dia['forma_pagamento'] == 'PIX']['valor_final'].sum()
         dinheiro_total = df_dia[df_dia['forma_pagamento'] == 'Dinheiro']['valor_final'].sum()
         credito_total = df_dia[df_dia['forma_pagamento'] == 'Cartão de Crédito']['valor_final'].sum()
@@ -345,10 +355,10 @@ with aba_dash:
         st.info("Nenhuma venda registrada ainda.")
 
 # ------------------------------------------
-# ABA GRELHA & RESERVAS POR HORÁRIO
+# ABA GRELHA & STATUS (COM NOVO DISPARO)
 # ------------------------------------------
 with aba_grelha:
-    st.markdown("### 🔥 Controle de Grelha e Fila de Retiradas")
+    st.markdown("### 🔥 Controle de Grelha e Disparo de Status")
     
     if historico_vendas:
         df_grelha = pd.DataFrame(historico_vendas)
@@ -358,31 +368,35 @@ with aba_grelha:
         df_hoje = df_grelha[df_grelha['data_str'] == data_hoje]
         
         if not df_hoje.empty:
-            horarios = df_hoje['horario_retirada'].unique()
-            horarios_ordenados = sorted(horarios)
+            horarios = sorted(df_hoje['horario_retirada'].unique())
             
-            for h in horarios_ordenados:
+            for h in horarios:
                 pedidos_horario = df_hoje[df_hoje['horario_retirada'] == h]
                 qtd_frangos_horario = pedidos_horario['qtd_frango'].sum()
                 
-                with st.expander(f"⏰ Horário {h} — {len(pedidos_horario)} pedido(s) | 🍗 {qtd_frangos_horario} frango(s) a preparar", expanded=True):
+                with st.expander(f"⏰ Horário {h} — {len(pedidos_horario)} pedido(s) | 🍗 {qtd_frangos_horario} frango(s)", expanded=True):
                     for _, ped in pedidos_horario.iterrows():
-                        col_p1, col_p2, col_p3, col_p4 = st.columns([3, 2, 2, 2])
+                        ped_dict = ped.to_dict()
+                        col_p1, col_p2, col_p3 = st.columns([3, 3, 4])
                         col_p1.write(f"👤 **{ped['cliente']}** ({ped['tipo_pedido']})")
-                        col_p2.write(f"🍗 {ped['qtd_frango']} Frangos | 🥣 {ped['qtd_farofa']} Farofas")
-                        col_p3.write(f"💰 R$ {ped['valor_final']:.2f} ({ped['forma_pagamento']})")
+                        col_p2.write(f"🍗 {ped['qtd_frango']} Frango(s) | 💰 R$ {ped['valor_final']:.2f}")
                         
-                        link_wsp = gerar_link_whatsapp(ped.to_dict())
-                        if link_wsp:
-                            col_p4.markdown(f"[📲 Enviar WhatsApp]({link_wsp})")
-                        else:
-                            col_p4.caption("Sem Tel/Inválido")
+                        link_pronto = gerar_link_whatsapp(ped_dict, status="pronto")
+                        link_entrega = gerar_link_whatsapp(ped_dict, status="entrega")
+                        
+                        with col_p3:
+                            if ped['tipo_pedido'] == "Retirada no Local" and link_pronto:
+                                st.markdown(f"[✅ **Avisar: PRONTO P/ RETIRADA**]({link_pronto})")
+                            elif ped['tipo_pedido'] == "Entrega (Delivery)" and link_entrega:
+                                st.markdown(f"[🛵 **Avisar: SAIU P/ ENTREGA**]({link_entrega})")
+                            else:
+                                st.caption("Sem WhatsApp")
                         
                         if ped.get('observacao'):
                             st.caption(f"📌 Obs: {ped['observacao']}")
                         st.divider()
         else:
-            st.info("Nenum pedido registrado para o dia de hoje.")
+            st.info("Nenhum pedido registrado para o dia de hoje.")
     else:
         st.info("Nenhum pedido cadastrado no sistema.")
 
@@ -394,7 +408,7 @@ with aba1:
     
     col_t1, col_t2 = st.columns([2, 1])
     with col_t1:
-        if st.button("🧪 Carregar Dados do Marko Pollo (Para Testar WhatsApp)", type="secondary"):
+        if st.button("🧪 Carregar Dados do Marko Pollo (Teste)", type="secondary"):
             st.session_state['input_nome'] = "Marko Pollo"
             st.session_state['input_tel'] = "63992543227"
             st.rerun()
@@ -448,7 +462,7 @@ with aba1:
     with col_v1:
         st.metric("Subtotal Calculado", f"R$ {subtotal:.2f}")
     with col_v2:
-        valor_final = st.number_input("💰 Valor Final Cobrado (Com Desconto/Ajuste)", min_value=0.0, value=float(subtotal), step=1.0, format="%.2f")
+        valor_final = st.number_input("💰 Valor Final Cobrado", min_value=0.0, value=float(subtotal), step=1.0, format="%.2f")
     with col_v3:
         forma_pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Dinheiro", "Cartão de Crédito", "Cartão de Débito"])
 
@@ -462,7 +476,7 @@ with aba1:
             troco = max(0.0, valor_recebido - valor_final)
             st.metric("💵 Troco a Devolver", f"R$ {troco:.2f}")
 
-    obs = st.text_input("Observações do Pedido / Endereço de Entrega", placeholder="Ex: Entregar perto do mercado / Sem pimenta")
+    obs = st.text_input("Observações / Endereço de Entrega", placeholder="Ex: Alameda 2, Casa 15 / Sem pimenta")
 
     if st.button("✅ Confirmar e Finalizar Venda", type="primary", use_container_width=True):
         nova_venda = {
@@ -488,7 +502,6 @@ with aba1:
         historico_vendas.insert(0, nova_venda)
         salvar_historico(historico_vendas)
         
-        # Limpa os inputs do formulário para o próximo pedido
         st.session_state['input_nome'] = ""
         st.session_state['input_tel'] = ""
         st.session_state['ultima_venda'] = nova_venda
@@ -501,7 +514,7 @@ with aba1:
         
         col_uv_head1, col_uv_head2 = st.columns([3, 1])
         with col_uv_head1:
-            st.markdown(f"#### 📄 Ações do Pedido Recente: **{uv['cliente']}** (R$ {uv['valor_final']:.2f})")
+            st.markdown(f"#### 📄 Ações do Pedido Recente: **{uv['cliente']}**")
         with col_uv_head2:
             if st.button("✖️ Iniciar Novo Pedido", type="secondary"):
                 del st.session_state['ultima_venda']
@@ -509,16 +522,16 @@ with aba1:
 
         col_act1, col_act2 = st.columns(2)
         with col_act1:
-            link_zap = gerar_link_whatsapp(uv)
+            link_zap = gerar_link_whatsapp(uv, status="confirmado")
             if link_zap:
-                st.markdown(f"👉 [📲 **Clique Aqui para Enviar no WhatsApp de {uv['cliente']}**]({link_zap})")
+                st.markdown(f"👉 [📲 **Enviar Confirmação no WhatsApp de {uv['cliente']}**]({link_zap})")
             else:
-                st.warning("⚠️ Telefone inválido ou não informado no cadastro para abrir o WhatsApp.")
+                st.warning("⚠️ Telefone inválido/não informado.")
         
         with col_act2:
             cupom_txt = gerar_cupom_texto(uv)
             st.download_button(
-                label="🖨️ Baixar Cupom do Pedido (Imprimir)",
+                label="🖨️ Baixar Cupom do Pedido",
                 data=cupom_txt,
                 file_name=f"cupom_{uv['cliente'].replace(' ', '_')}.txt",
                 mime="text/plain"
@@ -565,13 +578,13 @@ with aba2:
                 c3.write(f"📦 Pedidos: **{dados['qtd_pedidos']}** | 🍗 Frangos: **{frangos_acumulados}**")
                 c4.markdown(f"💰 Total Gasto: **R$ {dados['total_gasto']:.2f}**")
                 
-                st.progress(progresso, text=f"Fidelidade: {frangos_acumulados}/{meta} frangos comprados")
+                st.progress(progresso, text=f"Fidelidade: {frangos_acumulados}/{meta} frangos")
                 if frangos_acumulados >= meta:
-                    st.success("🎉 Este cliente atingiu a meta para ganhar um brinde/desconto!")
+                    st.success("🎉 Cliente elegível para brinde/desconto!")
                 st.divider()
 
 # ------------------------------------------
-# ABA 3: HISTÓRICO & EDIÇÃO DE VALORES
+# ABA 3: HISTÓRICO & EDIÇÃO
 # ------------------------------------------
 with aba3:
     st.markdown("### 📜 Histórico de Vendas (Envio WhatsApp e Edição)")
@@ -580,11 +593,9 @@ with aba3:
         for idx, item in enumerate(historico_vendas):
             with st.expander(f"🗓️ {item['data_hora']} - {item['cliente']} | R$ {item['valor_final']:.2f} ({item.get('forma_pagamento', 'N/I')})"):
                 
-                link_zap_hist = gerar_link_whatsapp(item)
+                link_zap_hist = gerar_link_whatsapp(item, status="confirmado")
                 if link_zap_hist:
-                    st.markdown(f"📲 [**Enviar/Reenviar Comprovante no WhatsApp de {item['cliente']}**]({link_zap_hist})")
-                else:
-                    st.caption("⚠️ Nenhum telefone válido cadastrado para este pedido.")
+                    st.markdown(f"📲 [**Reenviar Comprovante para {item['cliente']}**]({link_zap_hist})")
                 
                 st.markdown("---")
                 
@@ -602,54 +613,43 @@ with aba3:
                         edit_farofa = st.number_input("Farofas", value=item['qtd_farofa'], min_value=0)
                         edit_valor = st.number_input("💰 Valor Cobrado (Editável)", value=float(item['valor_final']), step=1.0)
 
-                    c_salvar, _ = st.columns(2)
-                    with c_salvar:
-                        if st.form_submit_button("💾 Salvar Alterações"):
-                            historico_vendas[idx]['cliente'] = edit_cliente
-                            historico_vendas[idx]['telefone'] = edit_tel
-                            historico_vendas[idx]['forma_pagamento'] = edit_pag
-                            historico_vendas[idx]['horario_retirada'] = edit_horario
-                            historico_vendas[idx]['observacao'] = edit_obs
-                            historico_vendas[idx]['qtd_frango'] = edit_frango
-                            historico_vendas[idx]['qtd_farofa'] = edit_farofa
-                            historico_vendas[idx]['valor_final'] = round(edit_valor, 2)
-                            
-                            salvar_historico(historico_vendas)
-                            st.success("Registro atualizado com sucesso!")
-                            st.rerun()
-
-                cupom_hist = gerar_cupom_texto(item)
-                st.download_button(
-                    label="🖨️ Baixar Cupom do Pedido",
-                    data=cupom_hist,
-                    file_name=f"cupom_{item['id']}.txt",
-                    mime="text/plain",
-                    key=f"btn_cp_{item['id']}"
-                )
+                    if st.form_submit_button("💾 Salvar Alterações"):
+                        historico_vendas[idx]['cliente'] = edit_cliente
+                        historico_vendas[idx]['telefone'] = edit_tel
+                        historico_vendas[idx]['forma_pagamento'] = edit_pag
+                        historico_vendas[idx]['horario_retirada'] = edit_horario
+                        historico_vendas[idx]['observacao'] = edit_obs
+                        historico_vendas[idx]['qtd_frango'] = edit_frango
+                        historico_vendas[idx]['qtd_farofa'] = edit_farofa
+                        historico_vendas[idx]['valor_final'] = round(edit_valor, 2)
+                        
+                        salvar_historico(historico_vendas)
+                        st.success("Atualizado!")
+                        st.rerun()
 
                 if st.button(f"❌ Excluir Venda (#{item['id']})", key=f"del_{item['id']}"):
                     historico_vendas.pop(idx)
                     salvar_historico(historico_vendas)
-                    st.success("Venda removida com sucesso!")
+                    st.success("Removido!")
                     st.rerun()
     else:
-        st.info("Nenhum registro de venda encontrado.")
+        st.info("Nenhum registro encontrado.")
 
 # ------------------------------------------
-# ABA 4: CONFIGURAÇÕES DE PREÇOS E ESTOQUE
+# ABA 4: CONFIGURAÇÕES DE PREÇOS
 # ------------------------------------------
 with aba4:
-    st.markdown("### ⚙️ Configurações de Preços, Estoque e Fidelidade")
+    st.markdown("### ⚙️ Configurações de Preços e Estoque")
     
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         p_frango = st.number_input("Preço Frango Assado (R$)", value=float(configs_atuais['PRECO_FRANGO']))
         p_farofa = st.number_input("Preço Porção Farofa (R$)", value=float(configs_atuais['PRECO_FAROFA']))
-        est_dia = st.number_input("🔥 Estoque Inicial de Frangos no Dia (Grelha)", value=int(configs_atuais.get('ESTOQUE_INICIAL', 40)), step=5)
+        est_dia = st.number_input("🔥 Estoque Inicial (Dia)", value=int(configs_atuais.get('ESTOQUE_INICIAL', 40)), step=5)
     with col_p2:
         p_batata = st.number_input("Preço Batata Extra (R$)", value=float(configs_atuais['PRECO_BATATA_EXTRA']))
         p_refri = st.number_input("Preço Refrigerante (R$)", value=float(configs_atuais['PRECO_REFRIGERANTE']))
-        meta_fid = st.number_input("Meta de Frangos para Cartão Fidelidade", value=int(configs_atuais.get('META_FIDELIDADE', 10)), step=1)
+        meta_fid = st.number_input("Meta Cartão Fidelidade", value=int(configs_atuais.get('META_FIDELIDADE', 10)), step=1)
 
     if st.button("💾 Salvar Configurações", use_container_width=True):
         novas_cfgs = {
@@ -665,12 +665,12 @@ with aba4:
         st.rerun()
 
 # ------------------------------------------
-# ABA 5: MANUAL E ORIENTAÇÕES DE USO
+# ABA 5: MANUAL E DICAS
 # ------------------------------------------
 with aba_ajuda:
-    st.markdown("### 📖 Guia de Uso — Frango Assado MV")
+    st.markdown("### 📖 Guia de Uso do Sistema")
     st.markdown("""
-    * **Testar WhatsApp:** Vá até a aba `🛒 Nova Venda`, clique no botão **🧪 Carregar Dados do Marko Pollo**, finalize a venda e clique no link gerado.
-    * **Troco:** Em pagamentos em dinheiro, o valor do troco a levar vai automaticamente para a nota e para o WhatsApp do cliente.
-    * **Relatório em PDF:** Na aba `📊 Dashboard & PDF`, selecione o dia e clique em **📄 BAIXAR RELATÓRIO DE VENDAS EM PDF**.
+    * **Disparo na Grelha:** Vá na aba `🔥 Grelha & Status`. Ao lado do pedido do cliente, você verá o botão direto **✅ PRONTO P/ RETIRADA** (para retirada no balcão) ou **🛵 SAIU P/ ENTREGA** (para delivery).
+    * **Troco:** O valor do troco digitado em vendas em dinheiro vai automaticamente para o comprovante do entregador.
+    * **PDF:** Baixe o relatório completo de fechamento de caixa na aba `📊 Dashboard & PDF`.
     """)
