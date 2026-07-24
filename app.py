@@ -28,7 +28,7 @@ CONFIG_PADRAO = {
     'ESTOQUE_INICIAL': 40        # Frangos colocados na churrasqueira no dia
 }
 
-# DADOS DE EXEMPLO SIMULADOS PARA UM DOMINGO (ATUALIZADO)
+# DADOS DE EXEMPLO SIMULADOS (MARKO POLLO COMO PRINCIPAL PARA TESTE)
 DADOS_EXEMPLO = [
     {
         'id': 1700000001,
@@ -45,7 +45,7 @@ DADOS_EXEMPLO = [
         'subtotal': 148.00,
         'valor_final': 140.00,
         'forma_pagamento': "PIX",
-        'observacao': "Desconto combo 2 frangos"
+        'observacao': "Pedido de teste - Marko Pollo"
     },
     {
         'id': 1700000002,
@@ -80,23 +80,6 @@ DADOS_EXEMPLO = [
         'valor_final': 65.00,
         'forma_pagamento': "Cartão de Débito",
         'observacao': ""
-    },
-    {
-        'id': 1700000004,
-        'data_hora': datetime.now().strftime("%d/%m/%Y") + " 11:45",
-        'cliente': "Marko Pollo",
-        'telefone': "63992543227",
-        'tipo_pedido': "Retirada no Local",
-        'horario_retirada': "12:00",
-        'taxa_entrega': 0.0,
-        'qtd_frango': 8,
-        'qtd_farofa': 4,
-        'qtd_batata': 2,
-        'qtd_refri': 2,
-        'subtotal': 536.00,
-        'valor_final': 500.00,
-        'forma_pagamento': "PIX",
-        'observacao': "Almoço de família - Atingiu Fidelidade!"
     }
 ]
 
@@ -268,9 +251,9 @@ col_top1, col_top2 = st.columns([3, 1])
 with col_top1:
     st.caption("📍 Endereço: 407 Norte (Em frente ao Supermercado da Matilde) | 📞 (63) 99297-1557")
 with col_top2:
-    if st.button("🗑️ ZERAR DADOS PARA INICIAR VENDAS", type="secondary", use_container_width=True):
-        salvar_historico([])
-        st.success("Histórico limpo!")
+    if st.button("🔄 RESTAURAR EXEMPLOS (INCLUI MARKO POLLO)", type="secondary", use_container_width=True):
+        salvar_historico(DADOS_EXEMPLO)
+        st.success("Exemplos restaurados com Marko Pollo!")
         st.rerun()
 
 # CÁLCULO DE ESTOQUE EM TEMPO REAL
@@ -357,21 +340,8 @@ with aba_dash:
         c_cx2.metric("💵 Dinheiro na Gaveta", f"R$ {dinheiro_total:.2f}")
         c_cx3.metric("💳 Cartão de Crédito", f"R$ {credito_total:.2f}")
         c_cx4.metric("💳 Cartão de Débito", f"R$ {debito_total:.2f}")
-        
-        st.markdown("---")
-        
-        c_graf1, c_graf2 = st.columns(2)
-        with c_graf1:
-            st.markdown("#### 💳 Forma de Pagamento")
-            df_pag = df_dia.groupby('forma_pagamento')['valor_final'].sum().reset_index()
-            st.bar_chart(data=df_pag, x='forma_pagamento', y='valor_final', height=200)
-            
-        with c_graf2:
-            st.markdown("#### 📈 Histórico por Domingo")
-            df_agrupado_dia = df.groupby('data_str', as_index=False)['valor_final'].sum()
-            st.bar_chart(data=df_agrupado_dia, x='data_str', y='valor_final', height=200)
     else:
-        st.info("Nenhuma venda registrada ainda para exibir dados no Dashboard.")
+        st.info("Nenhuma venda registrada ainda.")
 
 # ------------------------------------------
 # ABA GRELHA & RESERVAS POR HORÁRIO
@@ -403,7 +373,7 @@ with aba_grelha:
                         
                         link_wsp = gerar_link_whatsapp(ped.to_dict())
                         if link_wsp:
-                            col_p4.markdown(f"[📲 WhatsApp]({link_wsp})")
+                            col_p4.markdown(f"[📲 Enviar WhatsApp]({link_wsp})")
                         else:
                             col_p4.caption("Sem Tel")
                         
@@ -421,11 +391,20 @@ with aba_grelha:
 with aba1:
     st.markdown("### 📝 Registrar Novo Pedido")
     
+    # Botão de Atalho para Teste Rápido
+    if st.button("🧪 Carregar Dados do Marko Pollo (Para Testar WhatsApp)", type="secondary"):
+        st.session_state['input_nome'] = "Marko Pollo"
+        st.session_state['input_tel'] = "63992543227"
+        st.rerun()
+
+    val_nome = st.session_state.get('input_nome', '')
+    val_tel = st.session_state.get('input_tel', '')
+
     col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
     with col_c1:
-        cliente_nome = st.text_input("Nome do Cliente", placeholder="Ex: Marko Pollo")
+        cliente_nome = st.text_input("Nome do Cliente", value=val_nome, placeholder="Ex: Marko Pollo")
     with col_c2:
-        telefone = st.text_input("WhatsApp (DDD+Número)", placeholder="63992543227")
+        telefone = st.text_input("WhatsApp (DDD+Número)", value=val_tel, placeholder="63992543227")
     with col_c3:
         tipo_pedido = st.selectbox("Tipo de Pedido", ["Retirada no Local", "Entrega (Delivery)"])
 
@@ -517,7 +496,7 @@ with aba1:
         with col_act1:
             link_zap = gerar_link_whatsapp(uv)
             if link_zap:
-                st.markdown(f"👉 [📲 **Clique Aqui para Enviar a Mensagem no WhatsApp do Cliente**]({link_zap})")
+                st.markdown(f"👉 [📲 **Clique Aqui para Enviar a Mensagem no WhatsApp de {uv['cliente']}**]({link_zap})")
             else:
                 st.info("Número de WhatsApp não informado no cadastro deste pedido.")
         
@@ -536,7 +515,6 @@ with aba1:
 with aba2:
     st.markdown("### 👥 Ranking de Clientes e Cartão Fidelidade")
     meta = configs_atuais.get('META_FIDELIDADE', 10)
-    st.caption(f"Meta do Programa Fidelidade: A cada **{meta} frangos assados**, o cliente pode ganhar um brinde!")
     
     if historico_vendas:
         resumo_clientes = {}
@@ -576,8 +554,6 @@ with aba2:
                 if frangos_acumulados >= meta:
                     st.success("🎉 Este cliente atingiu a meta para ganhar um brinde/desconto!")
                 st.divider()
-    else:
-        st.info("Nenhuma venda realizada ainda para gerar a lista de clientes.")
 
 # ------------------------------------------
 # ABA 3: HISTÓRICO & EDIÇÃO DE VALORES
@@ -592,7 +568,7 @@ with aba3:
                 # BOTÃO DIRETO DE WHATSAPP NO HISTÓRICO
                 link_zap_hist = gerar_link_whatsapp(item)
                 if link_zap_hist:
-                    st.markdown(f"📲 [**Enviar/Reenviar Comprovante no WhatsApp do Cliente**]({link_zap_hist})")
+                    st.markdown(f"📲 [**Enviar/Reenviar Comprovante no WhatsApp de {item['cliente']}**]({link_zap_hist})")
                 else:
                     st.caption("⚠️ Nenhum telefone cadastrado para este pedido.")
                 
@@ -678,18 +654,7 @@ with aba4:
 # ------------------------------------------
 with aba_ajuda:
     st.markdown("### 📖 Guia de Uso — Frango Assado MV")
-    
     st.markdown("""
-    Bem-vindo ao sistema de gestão do **Frango Assado MV**!
-    
-    ---
-    
-    #### 📲 Como mandar mensagem por WhatsApp?
-    1. **Logo após cadastrar:** Na aba `🛒 Nova Venda`, logo que você salva um pedido, aparece um botão verde **"Clique Aqui para Enviar a Mensagem no WhatsApp do Cliente"**.
-    2. **A qualquer momento:** Na aba `📜 Histórico & Edição` ou na aba `🔥 Grelha & Reservas`, você verá um link de WhatsApp em **cada pedido individual**. É só clicar que abre a conversa no celular ou PC com o resumo formatado!
-    
-    #### 📄 Como baixar o Relatório em PDF?
-    * Acesse a aba **`📊 Dashboard & PDF`**.
-    * Selecione a data do domingo desejado.
-    * Clique no botão azul **`📄 BAIXAR RELATÓRIO DE VENDAS EM PDF`**.
+    * **Testar WhatsApp:** Vá até a aba `🛒 Nova Venda`, clique no botão **🧪 Carregar Dados do Marko Pollo**, finalize a venda e clique no link gerado. O sistema vai abrir o WhatsApp Web ou App direto para o número **63992543227** com a mensagem pronta.
+    * **Relatório em PDF:** Na aba `📊 Dashboard & PDF`, selecione o dia e clique em **📄 BAIXAR RELATÓRIO DE VENDAS EM PDF**.
     """)
