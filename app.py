@@ -28,13 +28,13 @@ CONFIG_PADRAO = {
     'ESTOQUE_INICIAL': 40        # Frangos colocados na churrasqueira no dia
 }
 
-# DADOS DE EXEMPLO SIMULADOS PARA UM DOMINGO
+# DADOS DE EXEMPLO SIMULADOS PARA UM DOMINGO (ATUALIZADO)
 DADOS_EXEMPLO = [
     {
         'id': 1700000001,
         'data_hora': datetime.now().strftime("%d/%m/%Y") + " 10:45",
-        'cliente': "Marcos Silva (Quadra 407)",
-        'telefone': "63992001122",
+        'cliente': "Marko Pollo",
+        'telefone': "63992543227",
         'tipo_pedido': "Retirada no Local",
         'horario_retirada': "11:00",
         'taxa_entrega': 0.0,
@@ -84,8 +84,8 @@ DADOS_EXEMPLO = [
     {
         'id': 1700000004,
         'data_hora': datetime.now().strftime("%d/%m/%Y") + " 11:45",
-        'cliente': "Marcos Silva (Quadra 407)",
-        'telefone': "63992001122",
+        'cliente': "Marko Pollo",
+        'telefone': "63992543227",
         'tipo_pedido': "Retirada no Local",
         'horario_retirada': "12:00",
         'taxa_entrega': 0.0,
@@ -423,9 +423,9 @@ with aba1:
     
     col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
     with col_c1:
-        cliente_nome = st.text_input("Nome do Cliente", placeholder="Ex: João da 407 Norte")
+        cliente_nome = st.text_input("Nome do Cliente", placeholder="Ex: Marko Pollo")
     with col_c2:
-        telefone = st.text_input("WhatsApp (DDD+Número)", placeholder="63992971557")
+        telefone = st.text_input("WhatsApp (DDD+Número)", placeholder="63992543227")
     with col_c3:
         tipo_pedido = st.selectbox("Tipo de Pedido", ["Retirada no Local", "Entrega (Delivery)"])
 
