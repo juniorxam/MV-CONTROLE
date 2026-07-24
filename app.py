@@ -145,12 +145,10 @@ def gerar_cupom_imagem(venda):
     width = 500
     height = 680
     
-    # Criar imagem com fundo creme claro (estilo papel de recibo)
     bg_color = (255, 253, 245)
     img = Image.new('RGB', (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
     
-    # Carregar fontes
     try:
         font_title = ImageFont.truetype("arial.ttf", 22)
         font_subtitle = ImageFont.truetype("arial.ttf", 13)
@@ -160,7 +158,6 @@ def gerar_cupom_imagem(venda):
     except:
         font_title = font_subtitle = font_bold = font_text = font_small = ImageFont.load_default()
 
-    # Cores
     c_orange = (211, 84, 0)
     c_dark = (44, 62, 80)
     c_gray = (127, 140, 141)
@@ -214,7 +211,6 @@ def gerar_cupom_imagem(venda):
         draw.text((30, y), f"Valor Recebido: R$ {venda.get('valor_recebido', 0):.2f}  (Troco: R$ {venda['troco']:.2f})", fill=(39, 174, 96), font=font_bold)
         y += 24
 
-    # Bloco com Fundo Destacado para o TOTAL
     y += 10
     draw.rectangle([30, y, width - 30, y + 45], fill=(254, 237, 222), outline=c_orange, width=1)
     draw.text((45, y + 22), "TOTAL DO PEDIDO:", fill=c_orange, font=font_bold, anchor="lm")
@@ -225,7 +221,6 @@ def gerar_cupom_imagem(venda):
         draw.text((30, y), f"📝 Obs: {venda['observacao']}", fill=c_dark, font=font_small)
         y += 25
 
-    # 5. Rodapé
     y = height - 40
     draw.line([(30, y - 10), (width - 30, y - 10)], fill=(220, 220, 220), width=1)
     draw.text((width//2, y), "Obrigado pela preferência e bom apetite! ❤️", fill=c_gray, font=font_subtitle, anchor="mm")
@@ -450,10 +445,10 @@ with aba_grelha:
         else:
             st.info("Nenhum pedido registrado para o dia de hoje.")
     else:
-        st.info("Nenhum pedido cadastrado no sistema.")
+        st.info("Nenum pedido cadastrado no sistema.")
 
 # ------------------------------------------
-# ABA 1: NOVA VENDA (COM CUPOM EM IMAGEM)
+# ABA 1: NOVA VENDA
 # ------------------------------------------
 with aba1:
     st.markdown("### 📝 Registrar Novo Pedido")
@@ -560,7 +555,6 @@ with aba1:
         st.success(f"Venda registrada com sucesso! Total: R$ {valor_final:.2f}")
         st.rerun()
 
-    # ÁREA DO RECIBO APÓS FINALIZAR VENDA
     if 'ultima_venda' in st.session_state:
         uv = st.session_state['ultima_venda']
         st.markdown("---")
@@ -735,12 +729,39 @@ with aba4:
         st.rerun()
 
 # ------------------------------------------
-# ABA 5: MANUAL E DICAS
+# ABA 5: MANUAL DE OPERAÇÃO COMPLETO
 # ------------------------------------------
 with aba_ajuda:
-    st.markdown("### 📖 Guia de Uso do Sistema")
+    st.markdown("### 📖 Manual Completo de Operação do Sistema")
+    st.write("Guia prático para a equipe de atendimento, churrasqueira e entregas do **Frango Assado MV**.")
+
     st.markdown("""
-    * **Cupom em Imagem:** Ao registrar a venda, a imagem do comprovante é exibida na tela. Clique em **🖼️ BAIXAR CUPOM EM IMAGEM (PNG)** para guardar ou enviar direto pelo WhatsApp.
-    * **Disparo na Grelha:** Na aba `🔥 Grelha & Status`, use os botões rápidos para avisar o cliente assim que o frango estiver pronto para busca ou a caminho da entrega.
-    * **Relatório em PDF:** Baixe o fechamento de caixa na aba `📊 Dashboard & PDF`.
+    ---
+    #### 🛒 1. Registrar uma Nova Venda (`🛒 Nova Venda`)
+    1. Preencha o **Nome do Cliente** e o **WhatsApp (com DDD)**.
+    2. Escolha o **Tipo de Pedido** (*Retirada no Local* ou *Entrega / Delivery*).
+    3. Selecione o **Horário Previsto** para saída/retirada do frango (Ex: 11:30).
+    4. Informe as quantidades de frangos, farofas, batatas ou refris.
+    5. Escolha a **Forma de Pagamento**.
+       * Se for *Dinheiro*, digite quanto o cliente entregou para que o sistema **calcule o troco automaticamente**.
+    6. Clique em **✅ Confirmar e Finalizar Venda**.
+
+    ---
+    #### 🖼️ 2. Gerar Cupom e Enviar Confirmação
+    * Assim que a venda é confirmada, um **cupom estilizado em imagem PNG** é gerado na tela.
+    * Clique em **🖼️ BAIXAR CUPOM EM IMAGEM (PNG)** para guardar a imagem no seu celular/computador ou enviar no grupo do WhatsApp.
+    * Utilize o link verde **📲 Enviar Confirmação no WhatsApp** para abrir o chat direto com o cliente contendo o resumo traduzido.
+
+    ---
+    #### 🔥 3. Controle da Churrasqueira e Entregas (`🔥 Grelha & Status`)
+    * Esta tela agrupa os pedidos por **Horário de Saída**.
+    * A equipe de cozinha consegue acompanhar exatamente **quantos frangos precisam sair em cada bloco de horário** (Ex: 11:00 vs 11:30).
+    * **Avisos Rápidos:**
+      * Para pedidos de *Retirada*: clique em **✅ Avisar: PRONTO P/ RETIRADA** assim que o frango for pra estufa.
+      * Para pedidos de *Delivery*: clique em **🛵 Avisar: SAIU P/ ENTREGA** informando o valor total e o troco exato do entregador.
+
+    ---
+    #### 👥 4. Fidelidade e Relatório Financeiro
+    * **`👥 Clientes & Fidelidade`:** O sistema acompanha os frangos comprados por cada cliente. Ao atingir a meta (padrão: 10 frangos), um alerta verde informará que o cliente tem direito a um frango de brinde.
+    * **`📊 Dashboard & PDF`:** Veja o fechamento de caixa discriminado por *PIX, Dinheiro e Cartões*. Clique em **📄 BAIXAR RELATÓRIO DE VENDAS EM PDF** para ter o relatório impresso do dia.
     """)
