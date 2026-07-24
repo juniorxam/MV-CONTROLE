@@ -31,51 +31,34 @@ CONFIG_PADRAO = {
     'ESTOQUE_INICIAL': 40        # Frangos colocados na churrasqueira no dia
 }
 
-# DADOS DE EXEMPLO SIMULADOS (MARKO POLLO COMO PRINCIPAL PARA TESTE)
-DADOS_EXEMPLO = [
-    {
-        'id': 1700000001,
-        'data_hora': datetime.now().strftime("%d/%m/%Y") + " 10:45",
-        'cliente': "Marko Pollo",
-        'telefone': "63992543227",
-        'tipo_pedido': "Retirada no Local",
-        'horario_retirada': "11:00",
-        'taxa_entrega': 0.0,
-        'qtd_frango': 2,
-        'qtd_farofa': 2,
-        'qtd_batata': 1,
-        'qtd_refri': 1,
-        'subtotal': 148.00,
-        'valor_final': 140.00,
-        'valor_recebido': 140.00,
-        'troco': 0.0,
-        'forma_pagamento': "PIX",
-        'observacao': "Pedido de teste - Marko Pollo"
-    },
-    {
-        'id': 1700000002,
-        'data_hora': datetime.now().strftime("%d/%m/%Y") + " 11:10",
-        'cliente': "Dona Maria (Matilde)",
-        'telefone': "63984003344",
-        'tipo_pedido': "Entrega (Delivery)",
-        'horario_retirada': "11:30",
-        'taxa_entrega': 5.0,
-        'qtd_frango': 1,
-        'qtd_farofa': 1,
-        'qtd_batata': 0,
-        'qtd_refri': 1,
-        'subtotal': 78.00,
-        'valor_final': 78.00,
-        'valor_recebido': 100.00,
-        'troco': 22.00,
-        'forma_pagamento': "Dinheiro",
-        'observacao': "Entregar na alameda 2, casa 15"
-    }
-]
+# ==========================================
+# FUNÇÕES DE SUPORTE & DADOS DE EXEMPLO
+# ==========================================
+def obter_dados_exemplo():
+    """Retorna dados de teste enxutos com foco no Marko Pollo."""
+    data_hoje = datetime.now().strftime("%d/%m/%Y")
+    return [
+        {
+            'id': 1700000001,
+            'data_hora': f"{data_hoje} 10:45",
+            'cliente': "Marko Pollo",
+            'telefone': "63992543227",
+            'tipo_pedido': "Retirada no Local",
+            'horario_retirada': "11:00",
+            'taxa_entrega': 0.0,
+            'qtd_frango': 2,
+            'qtd_farofa': 2,
+            'qtd_batata': 1,
+            'qtd_refri': 1,
+            'subtotal': 148.00,
+            'valor_final': 140.00,
+            'valor_recebido': 140.00,
+            'troco': 0.0,
+            'forma_pagamento': "PIX",
+            'observacao': "Pedido de teste - Marko Pollo"
+        }
+    ]
 
-# ==========================================
-# FUNÇÕES DE SUPORTE
-# ==========================================
 def carregar_configuracoes():
     cfgs = local_storage.getItem("mv_precos")
     if cfgs:
@@ -91,8 +74,9 @@ def carregar_configuracoes():
 def carregar_historico():
     hist = local_storage.getItem("mv_historico")
     if hist is None:
-        local_storage.setItem("mv_historico", json.dumps(DADOS_EXEMPLO))
-        return DADOS_EXEMPLO
+        exemplos = obter_dados_exemplo()
+        local_storage.setItem("mv_historico", json.dumps(exemplos))
+        return exemplos
     try:
         return json.loads(hist)
     except:
@@ -166,7 +150,7 @@ def gerar_cupom_imagem(venda):
     img = Image.new('RGB', (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
     
-    # Tentar carregar fonte padrão do sistema
+    # Carregar fontes
     try:
         font_title = ImageFont.truetype("arial.ttf", 22)
         font_subtitle = ImageFont.truetype("arial.ttf", 13)
@@ -198,7 +182,6 @@ def gerar_cupom_imagem(venda):
     draw.text((30, y), f"Horário de Retirada/Entrega: {venda.get('horario_retirada', 'Imediato')}", fill=c_orange, font=font_bold)
     
     y += 30
-    # Linha Divisória
     draw.line([(30, y), (width - 30, y)], fill=(220, 220, 220), width=2)
     
     y += 15
@@ -220,7 +203,6 @@ def gerar_cupom_imagem(venda):
         y += 24
 
     y += 10
-    # Linha Divisória Pontilhada
     draw.line([(30, y), (width - 30, y)], fill=(200, 200, 200), width=1)
     
     y += 20
@@ -333,9 +315,9 @@ col_top1, col_top2 = st.columns([3, 1])
 with col_top1:
     st.caption("📍 Endereço: 407 Norte (Em frente ao Supermercado da Matilde) | 📞 (63) 99297-1557")
 with col_top2:
-    if st.button("🔄 RESTAURAR EXEMPLOS (INCLUI MARKO POLLO)", type="secondary", use_container_width=True):
-        salvar_historico(DADOS_EXEMPLO)
-        st.success("Exemplos restaurados!")
+    if st.button("🔄 RESTAURAR EXEMPLO (MARKO POLLO)", type="secondary", use_container_width=True):
+        salvar_historico(obter_dados_exemplo())
+        st.success("Exemplo restaurado com sucesso!")
         st.rerun()
 
 hoje_str = datetime.now().strftime("%d/%m/%Y")
@@ -598,7 +580,6 @@ with aba1:
             if link_zap:
                 st.markdown(f"👉 [📲 **Enviar Confirmação no WhatsApp**]({link_zap})")
             
-            # Gerar e exibir a imagem do cupom na tela
             img_buffer = gerar_cupom_imagem(uv)
             st.image(img_buffer, caption="Preview do Cupom", width=380)
             
