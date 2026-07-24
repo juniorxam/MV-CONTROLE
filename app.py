@@ -4,6 +4,13 @@ from datetime import datetime
 import pandas as pd
 import urllib.parse
 from streamlit_local_storage import LocalStorage
+import io
+
+# Bibliotecas para geração de PDF
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 # Configuração da página Web
 st.set_page_config(page_title="Frango Assado MV - Gestão Completa", page_icon="🍗", layout="wide")
@@ -36,7 +43,7 @@ DADOS_EXEMPLO = [
         'qtd_batata': 1,
         'qtd_refri': 1,
         'subtotal': 148.00,
-        'valor_final': 140.00,  # Com desconto promocional
+        'valor_final': 140.00,
         'forma_pagamento': "PIX",
         'observacao': "Desconto combo 2 frangos"
     },
@@ -90,23 +97,6 @@ DADOS_EXEMPLO = [
         'valor_final': 500.00,
         'forma_pagamento': "PIX",
         'observacao': "Almoço de família - Atingiu Fidelidade!"
-    },
-    {
-        'id': 1700000005,
-        'data_hora': datetime.now().strftime("%d/%m/%Y") + " 12:15",
-        'cliente': "Soraia Lima",
-        'telefone': "63981115566",
-        'tipo_pedido': "Entrega (Delivery)",
-        'horario_retirada': "12:30",
-        'taxa_entrega': 6.0,
-        'qtd_frango': 1,
-        'qtd_farofa': 2,
-        'qtd_batata': 1,
-        'qtd_refri': 1,
-        'subtotal': 94.00,
-        'valor_final': 94.00,
-        'forma_pagamento': "Cartão de Crédito",
-        'observacao': "Deixar na portaria"
     }
 ]
 
@@ -128,7 +118,6 @@ def carregar_configuracoes():
 def carregar_historico():
     hist = local_storage.getItem("mv_historico")
     if hist is None:
-        # Se for o primeiro acesso, carrega os dados de exemplo automaticamente
         local_storage.setItem("mv_historico", json.dumps(DADOS_EXEMPLO))
         return DADOS_EXEMPLO
     try:
@@ -195,6 +184,77 @@ def gerar_cupom_texto(venda):
     cupom += f"================================\n"
     return cupom
 
+def gerar_pdf_relatorio(df_dia, data_str):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Título do Relatório
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, leading=22, alignment=1, textColor=colors.HexColor("#D35400"))
+    story.append(Paragraph("<b>FRANGO ASSADO MV - RELATÓRIO DE VENDAS</b>", title_style))
+    
+    sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=11, alignment=1)
+    story.append(Paragraph(f"Data do Relatório: {data_str} | 407 Norte - Palmas/TO", sub_style))
+    story.append(Spacer(1, 15))
+
+    # Métricas Gerais
+    total_fat = df_dia['valor_final'].sum()
+    total_frangos = df_dia['qtd_frango'].sum()
+    total_pedidos = len(df_dia)
+    
+    m_data = [
+        ["Faturamento Total", "Frangos Vendidos", "Qtd. Pedidos"],
+        [f"R$ {total_fat:.2f}", f"{total_frangos} un.", f"{total_pedidos}"]
+    ]
+    t_m = Table(m_data, colWidths=[180, 180, 180])
+    t_m.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#F39C12")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('BACKGROUND', (0,1), (-1,1), colors.HexColor("#FCF3CF")),
+        ('GRID', (0,0), (-1,-1), 1, colors.HexColor("#D35400")),
+    ]))
+    story.append(t_m)
+    story.append(Spacer(1, 15))
+
+    # Tabela de Pedidos
+    story.append(Paragraph("<b>Detalhamento das Vendas:</b>", styles['Heading2']))
+    story.append(Spacer(1, 5))
+
+    table_data = [["Hora", "Cliente", "Itens", "Horário", "Pagamento", "Total"]]
+    for _, row in df_dia.iterrows():
+        itens = f"{row['qtd_frango']} Frango(s)"
+        if row['qtd_farofa'] > 0: itens += f", {row['qtd_farofa']} Farofa(s)"
+        
+        table_data.append([
+            row['data_hora'].split(" ")[1] if " " in row['data_hora'] else "",
+            str(row['cliente'])[:18],
+            itens,
+            str(row.get('horario_retirada', 'Imediato')),
+            str(row.get('forma_pagamento', '')),
+            f"R$ {row['valor_final']:.2f}"
+        ])
+
+    t_pedidos = Table(table_data, colWidths=[45, 120, 150, 65, 85, 75])
+    t_pedidos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('ALIGN', (-1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#F2F4F4")])
+    ]))
+    story.append(t_pedidos)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 # ==========================================
 # INTERFACE GRÁFICA
 # ==========================================
@@ -203,14 +263,14 @@ st.title("🍗 Frango Assado MV")
 configs_atuais = carregar_configuracoes()
 historico_vendas = carregar_historico()
 
-# BARRA DE FERRAMENTAS DO TOPO (GERENCIAMENTO DE DADOS DE TESTE)
+# BARRA DE FERRAMENTAS DO TOPO
 col_top1, col_top2 = st.columns([3, 1])
 with col_top1:
     st.caption("📍 Endereço: 407 Norte (Em frente ao Supermercado da Matilde) | 📞 (63) 99297-1557")
 with col_top2:
     if st.button("🗑️ ZERAR DADOS PARA INICIAR VENDAS", type="secondary", use_container_width=True):
         salvar_historico([])
-        st.success("Histórico limpo! Pronto para registrar suas vendas reais.")
+        st.success("Histórico limpo!")
         st.rerun()
 
 # CÁLCULO DE ESTOQUE EM TEMPO REAL
@@ -229,15 +289,10 @@ col_est3.metric("🚨 Restantes na Churrasqueira", f"{estoque_restante} un.",
                 delta=f"-{frangos_vendidos_hoje}" if frangos_vendidos_hoje > 0 else "Total", 
                 delta_color="inverse")
 
-if estoque_restante <= 5 and estoque_restante > 0:
-    st.warning(f"⚠️ Atenção: Restam apenas {estoque_restante} frangos assados disponíveis!")
-elif estoque_restante == 0 and estoque_maximo > 0:
-    st.error("❌ Os frangos do dia esgotaram!")
-
 st.markdown("---")
 
 aba_dash, aba_grelha, aba1, aba2, aba3, aba4, aba_ajuda = st.tabs([
-    "📊 Dashboard & Caixa", 
+    "📊 Dashboard & PDF", 
     "🔥 Grelha & Reservas",
     "🛒 Nova Venda", 
     "👥 Clientes & Fidelidade", 
@@ -247,25 +302,36 @@ aba_dash, aba_grelha, aba1, aba2, aba3, aba4, aba_ajuda = st.tabs([
 ])
 
 # ------------------------------------------
-# ABA DASHBOARD & FECHAMENTO DE CAIXA
+# ABA DASHBOARD & RELATÓRIO PDF
 # ------------------------------------------
 with aba_dash:
-    st.markdown("### 📊 Painel de Vendas e Fechamento de Caixa")
+    st.markdown("### 📊 Painel de Vendas e Relatório em PDF")
     
     if historico_vendas:
         df = pd.DataFrame(historico_vendas)
-        
         df['data_dt'] = pd.to_datetime(df['data_hora'], format="%d/%m/%Y %H:%M")
         df['data_str'] = df['data_dt'].dt.strftime("%d/%m/%Y")
         
         datas_disponiveis = df['data_str'].unique()
         
-        col_filtro, _ = st.columns([2, 2])
+        col_filtro, col_pdf_btn = st.columns([2, 2])
         with col_filtro:
             data_selecionada = st.selectbox("🗓️ Selecione o Domingo/Dia:", datas_disponiveis, index=0)
         
         df_dia = df[df['data_str'] == data_selecionada]
         
+        with col_pdf_btn:
+            st.write(" ") # Espaçamento
+            pdf_bytes = gerar_pdf_relatorio(df_dia, data_selecionada)
+            st.download_button(
+                label="📄 BAIXAR RELATÓRIO DE VENDAS EM PDF",
+                data=pdf_bytes,
+                file_name=f"relatorio_vendas_{data_selecionada.replace('/', '_')}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True
+            )
+
         total_faturado_dia = df_dia['valor_final'].sum()
         total_frangos_dia = df_dia['qtd_frango'].sum()
         total_pedidos_dia = len(df_dia)
@@ -281,7 +347,6 @@ with aba_dash:
         st.markdown("---")
         
         st.markdown("#### 💵 Fechamento de Caixa do Dia (Conferência)")
-        
         pix_total = df_dia[df_dia['forma_pagamento'] == 'PIX']['valor_final'].sum()
         dinheiro_total = df_dia[df_dia['forma_pagamento'] == 'Dinheiro']['valor_final'].sum()
         credito_total = df_dia[df_dia['forma_pagamento'] == 'Cartão de Crédito']['valor_final'].sum()
@@ -305,15 +370,6 @@ with aba_dash:
             st.markdown("#### 📈 Histórico por Domingo")
             df_agrupado_dia = df.groupby('data_str', as_index=False)['valor_final'].sum()
             st.bar_chart(data=df_agrupado_dia, x='data_str', y='valor_final', height=200)
-
-        st.markdown("---")
-        csv_data = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Baixar Todas as Vendas em Excel/CSV",
-            data=csv_data,
-            file_name=f"vendas_frango_mv_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
     else:
         st.info("Nenhuma venda registrada ainda para exibir dados no Dashboard.")
 
@@ -322,7 +378,6 @@ with aba_dash:
 # ------------------------------------------
 with aba_grelha:
     st.markdown("### 🔥 Controle de Grelha e Fila de Retiradas")
-    st.caption("Organize a saída das encomendas e saiba quantos frangos precisam estar embalados a cada horário.")
     
     if historico_vendas:
         df_grelha = pd.DataFrame(historico_vendas)
@@ -341,10 +396,17 @@ with aba_grelha:
                 
                 with st.expander(f"⏰ Horário {h} — {len(pedidos_horario)} pedido(s) | 🍗 {qtd_frangos_horario} frango(s) a preparar", expanded=True):
                     for _, ped in pedidos_horario.iterrows():
-                        col_p1, col_p2, col_p3 = st.columns([3, 2, 2])
+                        col_p1, col_p2, col_p3, col_p4 = st.columns([3, 2, 2, 2])
                         col_p1.write(f"👤 **{ped['cliente']}** ({ped['tipo_pedido']})")
                         col_p2.write(f"🍗 {ped['qtd_frango']} Frangos | 🥣 {ped['qtd_farofa']} Farofas")
                         col_p3.write(f"💰 R$ {ped['valor_final']:.2f} ({ped['forma_pagamento']})")
+                        
+                        link_wsp = gerar_link_whatsapp(ped.to_dict())
+                        if link_wsp:
+                            col_p4.markdown(f"[📲 WhatsApp]({link_wsp})")
+                        else:
+                            col_p4.caption("Sem Tel")
+                        
                         if ped.get('observacao'):
                             st.caption(f"📌 Obs: {ped['observacao']}")
                         st.divider()
@@ -455,7 +517,9 @@ with aba1:
         with col_act1:
             link_zap = gerar_link_whatsapp(uv)
             if link_zap:
-                st.markdown(f"[📲 **Enviar Comprovante no WhatsApp do Cliente**]({link_zap})")
+                st.markdown(f"👉 [📲 **Clique Aqui para Enviar a Mensagem no WhatsApp do Cliente**]({link_zap})")
+            else:
+                st.info("Número de WhatsApp não informado no cadastro deste pedido.")
         
         with col_act2:
             cupom_txt = gerar_cupom_texto(uv)
@@ -519,11 +583,21 @@ with aba2:
 # ABA 3: HISTÓRICO & EDIÇÃO DE VALORES
 # ------------------------------------------
 with aba3:
-    st.markdown("### 📜 Histórico de Vendas (Edição de Registros)")
+    st.markdown("### 📜 Histórico de Vendas (Envio WhatsApp e Edição)")
     
     if historico_vendas:
         for idx, item in enumerate(historico_vendas):
             with st.expander(f"🗓️ {item['data_hora']} - {item['cliente']} | R$ {item['valor_final']:.2f} ({item.get('forma_pagamento', 'N/I')})"):
+                
+                # BOTÃO DIRETO DE WHATSAPP NO HISTÓRICO
+                link_zap_hist = gerar_link_whatsapp(item)
+                if link_zap_hist:
+                    st.markdown(f"📲 [**Enviar/Reenviar Comprovante no WhatsApp do Cliente**]({link_zap_hist})")
+                else:
+                    st.caption("⚠️ Nenhum telefone cadastrado para este pedido.")
+                
+                st.markdown("---")
+                
                 with st.form(key=f"form_edit_{item['id']}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
@@ -554,20 +628,14 @@ with aba3:
                             st.success("Registro atualizado com sucesso!")
                             st.rerun()
 
-                col_h_act1, col_h_act2 = st.columns(2)
-                with col_h_act1:
-                    link_zap_hist = gerar_link_whatsapp(item)
-                    if link_zap_hist:
-                        st.markdown(f"[📲 Reenviar Comprovante no WhatsApp]({link_zap_hist})")
-                with col_h_act2:
-                    cupom_hist = gerar_cupom_texto(item)
-                    st.download_button(
-                        label="🖨️ Baixar Cupom",
-                        data=cupom_hist,
-                        file_name=f"cupom_{item['id']}.txt",
-                        mime="text/plain",
-                        key=f"btn_cp_{item['id']}"
-                    )
+                cupom_hist = gerar_cupom_texto(item)
+                st.download_button(
+                    label="🖨️ Baixar Cupom do Pedido",
+                    data=cupom_hist,
+                    file_name=f"cupom_{item['id']}.txt",
+                    mime="text/plain",
+                    key=f"btn_cp_{item['id']}"
+                )
 
                 if st.button("❌ Excluir Venda", key=f"del_{item['id']}"):
                     historico_vendas.pop(idx)
@@ -612,41 +680,16 @@ with aba_ajuda:
     st.markdown("### 📖 Guia de Uso — Frango Assado MV")
     
     st.markdown("""
-    Bem-vindo ao sistema de gestão do **Frango Assado MV**! Este aplicativo foi feito para facilitar as vendas no dia a dia (principalmente aos domingos), direto pelo celular ou computador.
+    Bem-vindo ao sistema de gestão do **Frango Assado MV**!
     
     ---
     
-    #### 🧹 DADOS DE TESTE INICIAIS
-    * O aplicativo foi carregado com **5 vendas de exemplo** para você navegar, testar os gráficos, ver a fila da grelha e o cartão fidelidade funcionando.
-    * Quando for começar suas vendas reais de domingo, clique no botão cinza no topo: **`🗑️ ZERAR DADOS PARA INICIAR VENDAS`**.
+    #### 📲 Como mandar mensagem por WhatsApp?
+    1. **Logo após cadastrar:** Na aba `🛒 Nova Venda`, logo que você salva um pedido, aparece um botão verde **"Clique Aqui para Enviar a Mensagem no WhatsApp do Cliente"**.
+    2. **A qualquer momento:** Na aba `📜 Histórico & Edição` ou na aba `🔥 Grelha & Reservas`, você verá um link de WhatsApp em **cada pedido individual**. É só clicar que abre a conversa no celular ou PC com o resumo formatado!
     
-    ---
-    
-    #### 🛒 1. Como registrar uma Venda
-    * Acesse a aba **`🛒 Nova Venda`**.
-    * Preencha o nome do cliente e WhatsApp (opcional, mas recomendado para enviar comprovante).
-    * Escolha o **Horário de Retirada/Entrega** e a modalidade (Balcão ou Delivery).
-    * Selecione os itens do pedido (Frangos, Farofas, Batatas, Refris).
-    * O sistema calcula o subtotal automaticamente. Se for fazer um desconto ou promoção, **edite livremente o campo `Valor Final Cobrado`**.
-    * Escolha a forma de pagamento (PIX, Dinheiro, Cartão). Se for Dinheiro, digite quanto o cliente entregou para calcular o troco automático.
-    * Clique em **`✅ Confirmar e Finalizar Venda`**.
-    
-    #### 📲 2. Enviar Comprovante no WhatsApp e Imprimir Cupom
-    * Após finalizar a venda, clique em **`📲 Enviar Comprovante no WhatsApp`**. O aplicativo abrirá a conversa direto com a mensagem pronta do pedido.
-    * Para imprimir ou anexar na embalagem, clique em **`🖨️ Baixar Cupom do Pedido`**.
-    
-    #### 🔥 3. Controle da Grelha e Estoque
-    * No topo da tela, veja quantos frangos restam disponíveis no dia.
-    * Na aba **`🔥 Grelha & Reservas`**, visualize a lista de pedidos agrupados por horário (ex: 11:30, 12:00) para saber exatamente o que embalar primeiro.
-    
-    #### 👥 4. Cartão Fidelidade
-    * Na aba **`👥 Clientes & Fidelidade`**, o app soma automaticamente quantas vezes cada cliente comprou e exibe uma barra de progresso.
-    * Quando o cliente atinge 10 frangos comprados (ou a meta configurada), o sistema exibe um aviso de prêmio!
-    
-    #### 💵 5. Fechamento de Caixa
-    * No fim do expediente, vá em **`📊 Dashboard & Caixa`**.
-    * Confira os totais exatos em **Dinheiro**, **PIX** e **Cartões** para bater a gaveta com o saldo da conta.
-    
-    #### ⚙️ 6. Alterar Preços ou Quantidade do Dia
-    * Vá na aba **`⚙️ Configurações`** para reajustar os preços base dos produtos ou alterar a quantidade total de frangos que colocou para assar no domingo.
+    #### 📄 Como baixar o Relatório em PDF?
+    * Acesse a aba **`📊 Dashboard & PDF`**.
+    * Selecione a data do domingo desejado.
+    * Clique no botão azul **`📄 BAIXAR RELATÓRIO DE VENDAS EM PDF`**.
     """)
